@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>寝室人员分配系统</title>
+    <!-- 引入外部资源 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#07C160',
+                        secondary: '#F5F5F5',
+                        accent: '#FF9F43',
+                        admin: '#722ED1',
+                        pending: '#FFAA00',
+                        online: '#22C55E',
+                        offline: '#9CA3AF'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .dorm-card {
+                @apply bg-white rounded-xl shadow-md p-4 mb-4 transition-all duration-300 hover:shadow-lg;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-4 py-2 rounded-lg transition-all duration-300 hover:bg-primary/90 active:scale-95;
+            }
+            .btn-admin {
+                @apply bg-admin text-white px-4 py-2 rounded-lg transition-all duration-300 hover:bg-admin/90 active:scale-95;
+            }
+            .btn-accent {
+                @apply bg-accent text-white px-4 py-2 rounded-lg transition-all duration-300 hover:bg-accent/90 active:scale-95;
+            }
+            .btn-pending {
+                @apply bg-pending text-white px-4 py-2 rounded-lg transition-all duration-300 hover:bg-pending/90 active:scale-95;
+            }
+            .input-field {
+                @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50;
+            }
+            .person-item {
+                @apply flex items-center justify-between bg-gray-50 p-2 rounded-lg mb-2 transition-all duration-200 hover:bg-gray-100;
+            }
+            .person-item.selected {
+                @apply bg-primary/10 border-l-4 border-primary;
+            }
+            .person-item.has-request {
+                @apply bg-pending/10 border-l-4 border-pending;
+            }
+            .pulse-dot {
+                @apply relative inline-block w-2 h-2 rounded-full bg-online;
+            }
+            .pulse-dot::after {
+                content: '';
+                @apply absolute inline-block w-full h-full rounded-full bg-online animate-ping opacity-75;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 加载界面 -->
+    <div id="loadingScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div>
+        <p class="text-gray-600">系统加载中...</p>
+    </div>
+    
+    <!-- 登录界面 -->
+    <div id="loginScreen" class="fixed inset-0 bg-white z-40 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa fa-users text-primary text-2xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">寝室人员分配系统</h2>
+                <p class="text-gray-500">请输入姓名登录</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">您的姓名</label>
+                    <input type="text" id="username" class="input-field" placeholder="请输入您的姓名">
+                </div>
+                <button id="loginBtn" class="btn-primary w-full py-3">
+                    <i class="fa fa-sign-in mr-1"></i>登录
+                </button>
+                <p class="text-center text-sm text-gray-500">
+                    <a href="#" id="adminLoginLink" class="text-admin hover:underline">管理员登录</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 管理员登录界面 -->
+    <div id="adminLoginScreen" class="fixed inset-0 bg-white z-40 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-admin/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa fa-shield text-admin text-2xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">管理员登录</h2>
+                <p class="text-gray-500">请输入管理员密码</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">管理员密码</label>
+                    <input type="password" id="adminPassword" class="input-field" placeholder="请输入管理员密码">
+                </div>
+                <button id="adminLoginBtn" class="btn-admin w-full py-3">
+                    <i class="fa fa-lock mr-1"></i>登录
+                </button>
+                <p class="text-center text-sm text-gray-500">
+                    <a href="#" id="backToUserLogin" class="text-primary hover:underline">返回用户登录</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主界面头部 -->
+    <header class="bg-primary text-white shadow-md fixed top-0 left-0 right-0 z-10 hidden" id="mainHeader">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold">寝室人员分配系统</h1>
+            <div class="flex items-center space-x-3">
+                <div id="notificationContainer" class="relative">
+                    <button id="notificationBtn" class="p-2 rounded-full hover:bg-primary/80 transition-colors relative">
+                        <i class="fa fa-bell-o"></i>
+                        <span id="notificationBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+                    </button>
+                    <div id="notificationList" class="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg py-2 hidden z-20 max-h-60 overflow-y-auto">
+                        <p class="text-xs text-gray-500 px-3 py-1 border-b">通知</p>
+                        <div id="notifications" class="divide-y">
+                            <!-- 通知将动态添加到这里 -->
+                            <div class="px-3 py-2 text-sm text-gray-500">
+                                暂无通知
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 在线人员列表 -->
+                <div id="onlineUsersContainer" class="relative">
+                    <button id="onlineUsersBtn" class="p-2 rounded-full hover:bg-primary/80 transition-colors flex items-center">
+                        <span class="pulse-dot mr-1"></span>
+                        <i class="fa fa-user-o"></i>
+                        <span id="onlineCountBadge" class="absolute -top-1 -right-1 bg-online text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">0</span>
+                    </button>
+                    <div id="onlineUsersList" class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg py-2 hidden z-20 max-h-60 overflow-y-auto">
+                        <p class="text-xs text-gray-500 px-3 py-1 border-b">在线人员</p>
+                        <div id="onlineUsers" class="divide-y">
+                            <!-- 在线人员将动态添加到这里 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <span id="userRoleBadge" class="hidden bg-white/20 text-white text-xs px-2 py-1 rounded-full">
+                    普通用户
+                </span>
+                <span id="adminRoleBadge" class="hidden bg-admin/80 text-white text-xs px-2 py-1 rounded-full">
+                    <i class="fa fa-shield mr-1"></i>管理员
+                </span>
+                <span id="currentUser" class="text-sm flex items-center">
+                    <span class="pulse-dot mr-1"></span>
+                    <span id="currentUserName"></span>
+                </span>
+                <button id="logoutBtn" class="p-2 rounded-full hover:bg-primary/80 transition-colors">
+                    <i class="fa fa-sign-out"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+    
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 pt-20 pb-24 hidden" id="mainContent">
+        <!-- 同步状态指示器 -->
+        <div id="syncStatus" class="bg-green-50 text-green-700 text-sm px-3 py-1.5 rounded-lg mb-4 flex items-center">
+            <i class="fa fa-check-circle mr-2"></i>
+            <span>数据已同步</span>
+        </div>
+        
+        <!-- 管理员功能区 -->
+        <div id="adminControls" class="bg-white rounded-xl shadow-md p-5 mb-6 hidden">
+            <h2 class="text-lg font-semibold mb-4 flex items-center text-admin">
+                <i class="fa fa-cogs mr-2"></i>管理员功能
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button id="clearAllDataBtn" class="bg-red-500 text-white px-4 py-3 rounded-lg transition-all duration-300 hover:bg-red-600 active:scale-95 flex items-center justify-center">
+                    <i class="fa fa-trash mr-2"></i>清空所有数据
+                </button>
+                <button id="exportAllDataBtn" class="bg-blue-500 text-white px-4 py-3 rounded-lg transition-all duration-300 hover:bg-blue-600 active:scale-95 flex items-center justify-center">
+                    <i class="fa fa-download mr-2"></i>导出全部数据
+                </button>
+                <button id="manageUsersBtn" class="bg-purple-500 text-white px-4 py-3 rounded-lg transition-all duration-300 hover:bg-purple-600 active:scale-95 flex items-center justify-center">
+                    <i class="fa fa-user-circle mr-2"></i>管理用户
+                </button>
+            </div>
+        </div>
+        
+        <!-- 添加人员区域 -->
+        <div class="bg-white rounded-xl shadow-md p-5 mb-6">
+            <h2 class="text-lg font-semibold mb-4 flex items-center">
+                <i class="fa fa-user-plus text-primary mr-2"></i>添加新人员
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">人员姓名</label>
+                    <input type="text" id="personName" class="input-field" placeholder="请输入姓名">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">寝室号</label>
+                    <select id="dormSelect" class="input-field">
+                        <option value="110">110号寝室</option>
+                        <option value="111">111号寝室</option>
+                        <option value="201">201号寝室</option>
+                        <option value="202">202号寝室</option>
+                        <option value="203">203号寝室</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">床位号</label>
+                    <input type="number" id="bedNumber" class="input-field" min="1" max="6" placeholder="1-6">
+                </div>
+            </div>
+            <div class="mt-4 flex space-x-3">
+                <button id="addBtn" class="btn-primary flex-1 md:flex-none">
+                    <i class="fa fa-plus mr-1"></i>添加到寝室
+                </button>
+                <button id="swapBtn" class="btn-accent flex-1 md:flex-none disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i class="fa fa-exchange mr-1"></i>交换床位
+                </button>
+            </div>
+        </div>
+        
+        <!-- 寝室列表 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- 110号寝室 -->
+            <div class="dorm-card" id="dorm-110">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg">110号寝室</h3>
+                    <span class="bg-primary/10 text-primary text-sm px-2 py-1 rounded-full">
+                        <span class="dorm-count">0</span>/6人
+                    </span>
+                </div>
+                <div class="dorm-members max-h-60 overflow-y-auto">
+                    <div class="text-gray-500 text-center py-6 text-sm">
+                        该寝室暂无人员
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 111号寝室 -->
+            <div class="dorm-card" id="dorm-111">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg">111号寝室</h3>
+                    <span class="bg-primary/10 text-primary text-sm px-2 py-1 rounded-full">
+                        <span class="dorm-count">0</span>/6人
+                    </span>
+                </div>
+                <div class="dorm-members max-h-60 overflow-y-auto">
+                    <div class="text-gray-500 text-center py-6 text-sm">
+                        该寝室暂无人员
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 201号寝室 -->
+            <div class="dorm-card" id="dorm-201">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg">201号寝室</h3>
+                    <span class="bg-primary/10 text-primary text-sm px-2 py-1 rounded-full">
+                        <span class="dorm-count">0</span>/6人
+                    </span>
+                </div>
+                <div class="dorm-members max-h-60 overflow-y-auto">
+                    <div class="text-gray-500 text-center py-6 text-sm">
+                        该寝室暂无人员
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 202号寝室 -->
+            <div class="dorm-card" id="dorm-202">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg">202号寝室</h3>
+                    <span class="bg-primary/10 text-primary text-sm px-2 py-1 rounded-full">
+                        <span class="dorm-count">0</span>/6人
+                    </span>
+                </div>
+                <div class="dorm-members max-h-60 overflow-y-auto">
+                    <div class="text-gray-500 text-center py-6 text-sm">
+                        该寝室暂无人员
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 203号寝室 -->
+            <div class="dorm-card" id="dorm-203">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-lg">203号寝室</h3>
+                    <span class="bg-primary/10 text-primary text-sm px-2 py-1 rounded-full">
+                        <span class="dorm-count">0</span>/6人
+                    </span>
+                </div>
+                <div class="dorm-members max-h-60 overflow-y-auto">
+                    <div class="text-gray-500 text-center py-6 text-sm">
+                        该寝室暂无人员
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 交换请求模态框 -->
+    <div id="swapRequestModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-xl font-bold text-accent">交换床位请求</h3>
+                <button id="closeSwapRequestBtn" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="space-y-4 text-gray-700 mb-6">
+                <p>您确定要向以下人员发起交换请求吗？</p>
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p>您: <span id="swapYourInfo"></span></p>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p>对方: <span id="swapOtherInfo"></span></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">附加信息（可选）</label>
+                    <textarea id="swapMessage" class="input-field" rows="2" placeholder="请输入希望交换的原因..."></textarea>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancelSwapBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-all duration-300 hover:bg-gray-300 flex-1">取消</button>
+                <button id="sendSwapBtn" class="btn-accent flex-1">发送请求</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 处理交换请求模态框 -->
+    <div id="handleSwapModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-xl font-bold text-pending">收到交换请求</h3>
+                <button id="closeHandleSwapModal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="space-y-4 text-gray-700 mb-6">
+                <p><span id="swapRequester"></span> 希望与您交换床位：</p>
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p>对方: <span id="handleSwapOtherInfo"></span></p>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p>您: <span id="handleSwapYourInfo"></span></p>
+                </div>
+                <div class="bg-pending/5 p-3 rounded-lg border-l-4 border-pending">
+                    <p class="text-sm font-medium mb-1">附加信息：</p>
+                    <p class="text-sm text-gray-600" id="swapRequestMessage">-</p>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button id="rejectSwapBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-all duration-300 hover:bg-gray-300 flex-1">拒绝</button>
+                <button id="acceptSwapBtn" class="btn-primary flex-1">同意</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 交换结果提示模态框 -->
+    <div id="swapResultModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 text-center">
+            <div id="swapResultIcon" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <!-- 动态填充 -->
+            </div>
+            <h3 class="text-xl font-bold mb-3" id="swapResultTitle">操作结果</h3>
+            <p class="text-gray-700 mb-6" id="swapResultMessage">操作已完成</p>
+            <button id="closeSwapResultModal" class="btn-primary w-full">确定</button>
+        </div>
+    </div>
+    
+    <!-- 确认操作模态框 -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 transform scale-95 transition-transform duration-300">
+            <h3 class="text-xl font-bold text-red-500 mb-4" id="confirmTitle">确认操作</h3>
+            <p class="text-gray-700 mb-6" id="confirmMessage">您确定要执行此操作吗？</p>
+            <div class="flex space-x-3">
+                <button id="cancelConfirmBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-all duration-300 hover:bg-gray-300 flex-1">
+                    取消
+                </button>
+                <button id="confirmActionBtn" class="bg-red-500 text-white px-4 py-2 rounded-lg transition-all duration-300 hover:bg-red-600 flex-1">
+                    确认
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 提示框 -->
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-dark text-white px-4 py-3 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 z-50 flex items-center">
+        <i class="fa fa-info-circle mr-2"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentUser = null;
+        let isAdmin = false;
+        let dormitories = {
+            '110': [],
+            '111': [],
+            '201': [],
+            '202': [],
+            '203': []
+        };
+        let swapRequests = []; // 交换请求列表
+        let notifications = []; // 通知列表
+        let onlineUsers = []; // 在线用户列表
+        let selectedPersons = []; // 选中的用于交换的人员
+        let currentSwapRequest = null; // 当前正在处理的交换请求
+        let syncInterval; // 同步定时器
+        let lastSyncTime = 0; // 上次同步时间
+        
+        // 管理员密码
+        const ADMIN_PASSWORD = 'admin123';
+        // 模拟的在线用户数据存储键名
+        const ONLINE_USERS_STORAGE_KEY = 'dormSystemOnlineUsers';
+        // 同步间隔（毫秒）
+        const SYNC_INTERVAL_MS = 3000;
+        // 用户超时时间（毫秒）
+        const USER_TIMEOUT_MS = 10000;
+        
+        // DOM元素
+        const loadingScreen = document.getElementById('loadingScreen');
+        const loginScreen = document.getElementById('loginScreen');
+        const adminLoginScreen = document.getElementById('adminLoginScreen');
+        const usernameInput = document.getElementById('username');
+        const adminPasswordInput = document.getElementById('adminPassword');
+        const loginBtn = document.getElementById('loginBtn');
+        const adminLoginBtn = document.getElementById('adminLoginBtn');
+        const adminLoginLink = document.getElementById('adminLoginLink');
+        const backToUserLogin = document.getElementById('backToUserLogin');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const mainHeader = document.getElementById('mainHeader');
+        const mainContent = document.getElementById('mainContent');
+        const currentUserEl = document.getElementById('currentUser');
+        const currentUserName = document.getElementById('currentUserName');
+        const userRoleBadge = document.getElementById('userRoleBadge');
+        const adminRoleBadge = document.getElementById('adminRoleBadge');
+        const adminControls = document.getElementById('adminControls');
+        const syncStatus = document.getElementById('syncStatus');
+        
+        const personNameInput = document.getElementById('personName');
+        const dormSelect = document.getElementById('dormSelect');
+        const bedNumberInput = document.getElementById('bedNumber');
+        const addBtn = document.getElementById('addBtn');
+        const swapBtn = document.getElementById('swapBtn');
+        
+        const clearAllDataBtn = document.getElementById('clearAllDataBtn');
+        const exportAllDataBtn = document.getElementById('exportAllDataBtn');
+        const manageUsersBtn = document.getElementById('manageUsersBtn');
+        
+        const notificationBtn = document.getElementById('notificationBtn');
+        const notificationList = document.getElementById('notificationList');
+        const notificationBadge = document.getElementById('notificationBadge');
+        const notificationsContainer = document.getElementById('notifications');
+        
+        const onlineUsersBtn = document.getElementById('onlineUsersBtn');
+        const onlineUsersList = document.getElementById('onlineUsersList');
+        const onlineUsersContainer = document.getElementById('onlineUsers');
+        const onlineCountBadge = document.getElementById('onlineCountBadge');
+        
+        const swapRequestModal = document.getElementById('swapRequestModal');
+        const closeSwapRequestBtn = document.getElementById('closeSwapRequestBtn');
+        const cancelSwapBtn = document.getElementById('cancelSwapBtn');
+        const sendSwapBtn = document.getElementById('sendSwapBtn');
+        const swapYourInfo = document.getElementById('swapYourInfo');
+        const swapOtherInfo = document.getElementById('swapOtherInfo');
+        const swapMessage = document.getElementById('swapMessage');
+        
+        const handleSwapModal = document.getElementById('handleSwapModal');
+        const closeHandleSwapModal = document.getElementById('closeHandleSwapModal');
+        const rejectSwapBtn = document.getElementById('rejectSwapBtn');
+        const acceptSwapBtn = document.getElementById('acceptSwapBtn');
+        const swapRequester = document.getElementById('swapRequester');
+        const handleSwapYourInfo = document.getElementById('handleSwapYourInfo');
+        const handleSwapOtherInfo = document.getElementById('handleSwapOtherInfo');
+        const swapRequestMessage = document.getElementById('swapRequestMessage');
+        
+        const swapResultModal = document.getElementById('swapResultModal');
+        const closeSwapResultModal = document.getElementById('closeSwapResultModal');
+        const swapResultIcon = document.getElementById('swapResultIcon');
+        const swapResultTitle = document.getElementById('swapResultTitle');
+        const swapResultMessage = document.getElementById('swapResultMessage');
+        
+        const confirmModal = document.getElementById('confirmModal');
+        const confirmTitle = document.getElementById('confirmTitle');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const cancelConfirmBtn = document.getElementById('cancelConfirmBtn');
+        const confirmActionBtn = document.getElementById('confirmActionBtn');
+        
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        
+        // 初始化
+        function init() {
+            // 检查本地存储中的登录状态
+            const savedUser = localStorage.getItem('dormSystemUser');
+            if (savedUser) {
+                try {
+                    const user = JSON.parse(savedUser);
+                    currentUser = user.name;
+                    isAdmin = user.isAdmin;
+                    loadAllData();
+                    startSync();
+                    showMainInterface();
+                } catch (e) {
+                    console.error('加载用户数据失败', e);
+                    showLoginInterface();
+                }
+            } else {
+                showLoginInterface();
+            }
+            
+            // 添加事件监听
+            addEventListeners();
+        }
+        
+        // 显示登录界面
+        function showLoginInterface() {
+            stopSync();
+            loadingScreen.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            adminLoginScreen.classList.add('hidden');
+        }
+        
+        // 显示管理员登录界面
+        function showAdminLoginInterface() {
+            stopSync();
+            loadingScreen.classList.add('hidden');
+            loginScreen.classList.add('hidden');
+            adminLoginScreen.classList.remove('hidden');
+            adminPasswordInput.value = '';
+        }
+        
+        // 显示主界面
+        function showMainInterface() {
+            loadingScreen.classList.add('hidden');
+            mainHeader.classList.remove('hidden');
+            mainContent.classList.remove('hidden');
+            
+            // 显示用户信息
+            currentUserName.textContent = currentUser;
+            
+            // 根据用户角色显示不同内容
+            if (isAdmin) {
+                adminRoleBadge.classList.remove('hidden');
+                adminControls.classList.remove('hidden');
+            } else {
+                userRoleBadge.classList.remove('hidden');
+            }
+            
+            // 标记当前用户为在线
+            updateUserOnlineStatus(true);
+            
+            // 渲染寝室数据
+            renderAllDorms();
+            
+            // 更新通知
+            updateNotifications();
+            
+            // 更新在线用户列表
+            updateOnlineUsersList();
+        }
+        
+        // 登录
+        function login() {
+            const username = usernameInput.value.trim();
+            
+            if (!username) {
+                showToast('请输入您的姓名');
+                return;
+            }
+            
+            // 保存用户信息
+            currentUser = username;
+            isAdmin = false;
+            localStorage.setItem('dormSystemUser', JSON.stringify({
+                name: username,
+                isAdmin: false
+            }));
+            
+            // 加载数据
+            loadAllData();
+            
+            // 开始同步
+            startSync();
+            
+            // 显示主界面
+            loginScreen.classList.add('hidden');
+            showMainInterface();
+            
+            showToast(`欢迎，${username}!`);
+        }
+        
+        // 管理员登录
+        function adminLogin() {
+            const password = adminPasswordInput.value.trim();
+            
+            if (!password) {
+                showToast('请输入管理员密码');
+                return;
+            }
+            
+            if (password !== ADMIN_PASSWORD) {
+                showToast('管理员密码错误');
+                return;
+            }
+            
+            // 保存管理员信息
+            currentUser = '管理员';
+            isAdmin = true;
+            localStorage.setItem('dormSystemUser', JSON.stringify({
+                name: '管理员',
+                isAdmin: true
+            }));
+            
+            // 加载数据
+            loadAllData();
+            
+            // 开始同步
+            startSync();
+            
+            // 显示主界面
+            adminLoginScreen.classList.add('hidden');
+            showMainInterface();
+            
+            showToast('管理员登录成功');
+        }
+        
+        // 登出
+        function logout() {
+            // 标记当前用户为离线
+            updateUserOnlineStatus(false);
+            
+            // 清除本地存储
+            localStorage.removeItem('dormSystemUser');
+            currentUser = null;
+            isAdmin = false;
+            
+            // 停止同步
+            stopSync();
+            
+            // 重置界面
+            mainHeader.classList.add('hidden');
+            mainContent.classList.add('hidden');
+            adminControls.classList.add('hidden');
+            userRoleBadge.classList.add('hidden');
+            adminRoleBadge.classList.add('hidden');
+            
+            // 重置表单
+            usernameInput.value = '';
+            
+            showLoginInterface();
+        }
+        
+        // 加载所有数据
+        function loadAllData() {
+            // 加载寝室数据
+            const savedDorms = localStorage.getItem('dormSystemData');
+            if (savedDorms) {
+                try {
+                    dormitories = JSON.parse(savedDorms);
+                } catch (e) {
+                    console.error('加载寝室数据失败', e);
+                }
+            }
+            
+            // 加载交换请求
+            const savedRequests = localStorage.getItem('dormSystemSwapRequests');
+            if (savedRequests) {
+                try {
+                    swapRequests = JSON.parse(savedRequests);
+                } catch (e) {
+                    console.error('加载交换请求失败', e);
+                }
+            }
+            
+            // 加载通知
+            const savedNotifications = localStorage.getItem('dormSystemNotifications');
+            if (savedNotifications) {
+                try {
+                    notifications = JSON.parse(savedNotifications);
+                } catch (e) {
+                    console.error('加载通知失败', e);
+                }
+            }
+            
+            // 加载在线用户
+            loadOnlineUsers();
+        }
+        
+        // 保存所有数据
+        function saveAllData() {
+            localStorage.setItem('dormSystemData', JSON.stringify(dormitories));
+            localStorage.setItem('dormSystemSwapRequests', JSON.stringify(swapRequests));
+            localStorage.setItem('dormSystemNotifications', JSON.stringify(notifications));
+            
+            // 标记数据已更改，需要同步
+            lastSyncTime = Date.now();
+            updateSyncStatus(true);
+        }
+        
+        // 加载在线用户
+        function loadOnlineUsers() {
+            const savedOnlineUsers = localStorage.getItem(ONLINE_USERS_STORAGE_KEY);
+            if (savedOnlineUsers) {
+                try {
+                    onlineUsers = JSON.parse(savedOnlineUsers);
+                    
+                    // 清理超时用户
+                    const now = Date.now();
+                    onlineUsers = onlineUsers.filter(user => 
+                        now - user.lastActive < USER_TIMEOUT_MS
+                    );
+                    
+                    // 保存清理后的列表
+                    saveOnlineUsers();
+                } catch (e) {
+                    console.error('加载在线用户失败', e);
+                    onlineUsers = [];
+                }
+            } else {
+                onlineUsers = [];
+            }
+        }
+        
+        // 保存在线用户
+        function saveOnlineUsers() {
+            localStorage.setItem(ONLINE_USERS_STORAGE_KEY, JSON.stringify(onlineUsers));
+        }
+        
+        // 更新用户在线状态
+        function updateUserOnlineStatus(isOnline) {
+            if (!currentUser) return;
+            
+            const now = Date.now();
+            const userIndex = onlineUsers.findIndex(u => u.name === currentUser);
+            
+            if (isOnline) {
+                // 更新为在线状态
+                if (userIndex !== -1) {
+                    onlineUsers[userIndex].lastActive = now;
+                } else {
+                    onlineUsers.push({
+                        name: currentUser,
+                        isAdmin: isAdmin,
+                        lastActive: now
+                    });
+                }
+            } else if (userIndex !== -1) {
+                // 更新为离线状态（从列表中移除）
+                onlineUsers.splice(userIndex, 1);
+            }
+            
+            // 保存在线用户列表
+            saveOnlineUsers();
+            
+            // 更新在线用户显示
+            updateOnlineUsersList();
+        }
+        
+        // 更新在线用户列表显示
+        function updateOnlineUsersList() {
+            // 按活动时间排序（最新的在前）
+            const sortedUsers = [...onlineUsers].sort((a, b) => b.lastActive - a.lastActive);
+            
+            // 更新在线人数
+            onlineCountBadge.textContent = sortedUsers.length;
+            
+            // 清空列表
+            onlineUsersContainer.innerHTML = '';
+            
+            // 如果没有在线用户
+            if (sortedUsers.length === 0) {
+                onlineUsersContainer.innerHTML = `
+                    <div class="px-3 py-2 text-sm text-gray-500">
+                        暂无在线人员
+                    </div>
+                `;
+                return;
+            }
+            
+            // 添加在线用户，明确显示名字
+            sortedUsers.forEach(user => {
+                const userElement = document.createElement('div');
+                userElement.className = `px-3 py-2 text-sm ${user.name === currentUser ? 'bg-primary/5' : ''}`;
+                
+                let adminLabel = '';
+                if (user.isAdmin) {
+                    adminLabel = '<span class="ml-1.5 text-xs bg-admin/10 text-admin px-1.5 py-0.5 rounded">管理员</span>';
+                }
+                
+                // 明确显示在线人员名字
+                userElement.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="pulse-dot mr-2"></span>
+                        <span class="font-medium">${user.name}</span> ${adminLabel}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5">${formatTime(user.lastActive)}</p>
+                `;
+                
+                onlineUsersContainer.appendChild(userElement);
+            });
+        }
+        
+        // 开始同步过程
+        function startSync() {
+            // 清除现有定时器
+            stopSync();
+            
+            // 立即执行一次同步
+            syncData();
+            
+            // 设置定时器
+            syncInterval = setInterval(syncData, SYNC_INTERVAL_MS);
+        }
+        
+        // 停止同步过程
+        function stopSync() {
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+        }
+        
+        // 同步数据
+        function syncData() {
+            if (!currentUser) return;
+            
+            // 更新当前用户的活动时间
+            updateUserOnlineStatus(true);
+            
+            // 检查是否有其他用户更新的数据
+            const remoteDorms = localStorage.getItem('dormSystemData');
+            const remoteRequests = localStorage.getItem('dormSystemSwapRequests');
+            const remoteNotifications = localStorage.getItem('dormSystemNotifications');
+            
+            // 保存当前数据的时间戳
+            const localDataTime = lastSyncTime;
+            
+            // 获取远程数据的修改时间（使用存储事件的时间戳）
+            const remoteDataTime = localStorage.getItem('dormSystemDataTimestamp') || 0;
+            
+            // 如果远程数据更新，则加载远程数据
+            if (parseInt(remoteDataTime) > localDataTime) {
+                loadAllData();
+                renderAllDorms();
+                updateNotifications();
+                showToast('已同步最新数据');
+                updateSyncStatus(true);
+            } else if (localDataTime > 0) {
+                // 如果本地数据更新，则更新时间戳
+                localStorage.setItem('dormSystemDataTimestamp', localDataTime.toString());
+            }
+        }
+        
+        // 更新同步状态显示
+        function updateSyncStatus(isSynced) {
+            if (isSynced) {
+                syncStatus.className = 'bg-green-50 text-green-700 text-sm px-3 py-1.5 rounded-lg mb-4 flex items-center';
+                syncStatus.innerHTML = '<i class="fa fa-check-circle mr-2"></i><span>数据已同步</span>';
+            } else {
+                syncStatus.className = 'bg-yellow-50 text-yellow-700 text-sm px-3 py-1.5 rounded-lg mb-4 flex items-center';
+                syncStatus.innerHTML = '<i class="fa fa-refresh mr-2 fa-spin"></i><span>正在同步数据...</span>';
+            }
+        }
+        
+        // 添加人员到寝室
+        function addPersonToDorm() {
+            const name = personNameInput.value.trim();
+            const dormId = dormSelect.value;
+            const bedNumber = parseInt(bedNumberInput.value);
+            
+            // 验证输入
+            if (!name) {
+                showToast('请输入人员姓名');
+                return;
+            }
+            
+            if (!bedNumber || bedNumber < 1 || bedNumber > 6) {
+                showToast('请输入有效的床位号（1-6）');
+                return;
+            }
+            
+            // 检查寝室是否已满
+            if (dormitories[dormId].length >= 6) {
+                showToast(`${dormId}号寝室已满（最多6人）`);
+                return;
+            }
+            
+            // 检查床位是否已被占用
+            const bedOccupied = dormitories[dormId].some(person => person.bed === bedNumber);
+            if (bedOccupied) {
+                showToast(`${dormId}号寝室的${bedNumber}号床位已被占用`);
+                return;
+            }
+            
+            // 检查该人是否已在其他寝室
+            let personExists = false;
+            let existingDorm = '';
+            Object.keys(dormitories).forEach(id => {
+                const found = dormitories[id].find(p => p.name === name);
+                if (found) {
+                    personExists = true;
+                    existingDorm = id;
+                }
+            });
+            
+            if (personExists) {
+                showConfirmModal(
+                    '人员已存在',
+                    `${name}已在${existingDorm}号寝室，是否要移动到新寝室？`,
+                    () => {
+                        // 从原寝室移除
+                        Object.keys(dormitories).forEach(id => {
+                            const index = dormitories[id].findIndex(p => p.name === name);
+                            if (index !== -1) {
+                                dormitories[id].splice(index, 1);
+                            }
+                        });
+                        
+                        // 添加到新寝室
+                        addPerson(name, dormId, bedNumber);
+                    }
+                );
+                return;
+            }
+            
+            // 添加新人员
+            addPerson(name, dormId, bedNumber);
+        }
+        
+        // 实际执行添加人员操作
+        function addPerson(name, dormId, bedNumber) {
+            dormitories[dormId].push({ 
+                name, 
+                bed: bedNumber,
+                addedBy: currentUser,
+                addedTime: new Date().toISOString()
+            });
+            
+            // 按床位号排序
+            dormitories[dormId].sort((a, b) => a.bed - b.bed);
+            
+            // 保存数据
+            saveAllData();
+            
+            // 重新渲染该寝室
+            renderDorm(dormId);
+            
+            // 清空输入框
+            personNameInput.value = '';
+            bedNumberInput.value = '';
+            
+            // 显示成功提示
+            showToast(`已将${name}添加到${dormId}号寝室${bedNumber}号床`);
+        }
+        
+        // 从寝室移除人员
+        function removePersonFromDorm(dormId, index) {
+            const person = dormitories[dormId][index];
+            
+            // 管理员可以删除任何人，普通用户只能删除自己添加的
+            if (!isAdmin && person.addedBy !== currentUser) {
+                showToast('您没有权限删除此人员');
+                return;
+            }
+            
+            // 显示确认
+            showConfirmModal(
+                '确认移除',
+                `确定要将${person.name}从${dormId}号寝室移除吗？`,
+                () => {
+                    // 移除人员
+                    dormitories[dormId].splice(index, 1);
+                    
+                    // 保存数据
+                    saveAllData();
+                    
+                    // 重新渲染该寝室
+                    renderDorm(dormId);
+                    
+                    // 显示提示
+                    showToast(`已将${person.name}从${dormId}号寝室移除`);
+                }
+            );
+        }
+        
+        // 选择人员用于交换
+        function selectPersonForSwap(dormId, index, element) {
+            // 如果是管理员，不允许使用交换功能
+            if (isAdmin) {
+                showToast('管理员不参与床位交换');
+                return;
+            }
+            
+            // 获取人员信息
+            const person = dormitories[dormId][index];
+            
+            // 不能选择自己进行交换
+            if (person.name === currentUser) {
+                showToast('不能选择自己进行交换');
+                return;
+            }
+            
+            // 检查是否已选中
+            const isSelected = selectedPersons.some(p => 
+                p.dormId === dormId && p.index === index
+            );
+            
+            if (isSelected) {
+                // 取消选择
+                selectedPersons = selectedPersons.filter(p => !(p.dormId === dormId && p.index === index));
+                element.classList.remove('selected');
+            } else {
+                // 最多选择1人（自己是默认的另一人）
+                if (selectedPersons.length >= 1) {
+                    // 先取消已选中的
+                    const [prev] = selectedPersons;
+                    const prevElement = document.querySelector(`#dorm-${prev.dormId} .dorm-members .person-item:nth-child(${prev.index + 1})`);
+                    if (prevElement) prevElement.classList.remove('selected');
+                    
+                    // 清空选择
+                    selectedPersons = [];
+                }
+                
+                // 添加选择
+                selectedPersons.push({ dormId, index, ...person });
+                element.classList.add('selected');
+            }
+            
+            // 更新交换按钮状态
+            updateSwapButton();
+        }
+        
+        // 更新交换按钮状态
+        function updateSwapButton() {
+            // 检查用户是否在寝室中
+            const userInDorm = checkUserInDorm();
+            
+            // 交换按钮状态：用户必须在寝室中，且已选择一个交换对象
+            swapBtn.disabled = !(userInDorm && selectedPersons.length === 1);
+        }
+        
+        // 检查当前用户是否在寝室中
+        function checkUserInDorm() {
+            for (const dormId in dormitories) {
+                const found = dormitories[dormId].find(p => p.name === currentUser);
+                if (found) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // 获取当前用户所在的寝室和床位信息
+        function getUserDormInfo() {
+            for (const dormId in dormitories) {
+                const index = dormitories[dormId].findIndex(p => p.name === currentUser);
+                if (index !== -1) {
+                    return {
+                        dormId,
+                        index,
+                        ...dormitories[dormId][index]
+                    };
+                }
+            }
+            return null;
+        }
+        
+        // 打开交换请求模态框
+        function openSwapRequestModal() {
+            // 获取用户信息
+            const userInfo = getUserDormInfo();
+            if (!userInfo) {
+                showToast('您不在任何寝室中，无法发起交换');
+                return;
+            }
+            
+            // 获取选中的交换对象
+            if (selectedPersons.length !== 1) {
+                showToast('请选择一位交换对象');
+                return;
+            }
+            const otherPerson = selectedPersons[0];
+            
+            // 检查是否已经有未处理的交换请求
+            const existingRequest = swapRequests.find(req => 
+                (req.requester.name === currentUser && req.target.name === otherPerson.name && req.status === 'pending') ||
+                (req.requester.name === otherPerson.name && req.target.name === currentUser && req.status === 'pending')
+            );
+            
+            if (existingRequest) {
+                showToast('已有未处理的交换请求，请先处理');
+                return;
+            }
+            
+            // 填充模态框信息
+            swapYourInfo.textContent = `${userInfo.name} - ${userInfo.dormId}号寝室${userInfo.bed}号床`;
+            swapOtherInfo.textContent = `${otherPerson.name} - ${otherPerson.dormId}号寝室${otherPerson.bed}号床`;
+            swapMessage.value = '';
+            
+            // 显示模态框
+            swapRequestModal.classList.remove('opacity-0', 'pointer-events-none');
+            swapRequestModal.querySelector('div').classList.remove('scale-95');
+            swapRequestModal.querySelector('div').classList.add('scale-100');
+        }
+        
+        // 发送交换请求
+        function sendSwapRequest() {
+            // 获取用户信息
+            const userInfo = getUserDormInfo();
+            if (!userInfo) {
+                hideSwapRequestModal();
+                showToast('您不在任何寝室中，无法发起交换');
+                return;
+            }
+            
+            // 获取交换对象
+            if (selectedPersons.length !== 1) {
+                hideSwapRequestModal();
+                showToast('请选择一位交换对象');
+                return;
+            }
+            const otherPerson = selectedPersons[0];
+            
+            // 创建交换请求
+            const requestId = 'req_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+            const newRequest = {
+                id: requestId,
+                requester: {
+                    name: userInfo.name,
+                    dormId: userInfo.dormId,
+                    bed: userInfo.bed,
+                    index: userInfo.index
+                },
+                target: {
+                    name: otherPerson.name,
+                    dormId: otherPerson.dormId,
+                    bed: otherPerson.bed,
+                    index: otherPerson.index
+                },
+                message: swapMessage.value.trim(),
+                status: 'pending', // pending, accepted, rejected
+                createdAt: new Date().toISOString()
+            };
+            
+            // 添加到请求列表
+            swapRequests.push(newRequest);
+            
+            // 创建通知
+            addNotification(
+                otherPerson.name,
+                `收到来自${userInfo.name}的床位交换请求`,
+                'swap_request',
+                requestId
+            );
+            
+            // 保存数据
+            saveAllData();
+            
+            // 隐藏模态框
+            hideSwapRequestModal();
+            
+            // 清空选择
+            clearPersonSelection();
+            
+            // 显示结果
+            showSwapResultModal(
+                'success',
+                '交换请求已发送',
+                `已向${otherPerson.name}发送交换请求，请等待对方回复`
+            );
+            
+            // 重新渲染
+            renderAllDorms();
+        }
+        
+        // 处理交换请求（同意或拒绝）
+        function handleSwapRequest(accept) {
+            if (!currentSwapRequest) return;
+            
+            const requestId = currentSwapRequest.id;
+            const requestIndex = swapRequests.findIndex(req => req.id === requestId);
+            
+            if (requestIndex === -1) {
+                hideHandleSwapModal();
+                showToast('交换请求不存在');
+                return;
+            }
+            
+            // 更新请求状态
+            swapRequests[requestIndex].status = accept ? 'accepted' : 'rejected';
+            swapRequests[requestIndex].handledAt = new Date().toISOString();
+            
+            // 创建回复通知
+            addNotification(
+                currentSwapRequest.requester.name,
+                `${currentUser}已${accept ? '同意' : '拒绝'}了您的床位交换请求`,
+                `swap_${accept ? 'accepted' : 'rejected'}`,
+                requestId
+            );
+            
+            // 如果同意，执行交换
+            if (accept) {
+                performSwap(currentSwapRequest);
+            }
+            
+            // 保存数据
+            saveAllData();
+            
+            // 隐藏模态框
+            hideHandleSwapModal();
+            currentSwapRequest = null;
+            
+            // 显示结果
+            showSwapResultModal(
+                accept ? 'success' : 'info',
+                accept ? '已同意交换' : '已拒绝交换',
+                accept ? '床位交换已完成' : '已拒绝对方的交换请求'
+            );
+            
+            // 重新渲染
+            renderAllDorms();
+            updateNotifications();
+        }
+        
+        // 执行交换操作
+        function performSwap(request) {
+            // 获取双方信息
+            const { requester, target } = request;
+            
+            // 在各自的寝室中找到对方
+            const requesterDorm = dormitories[requester.dormId];
+            const targetDorm = dormitories[target.dormId];
+            
+            const requesterIndex = requesterDorm.findIndex(p => p.name === requester.name && p.bed === requester.bed);
+            const targetIndex = targetDorm.findIndex(p => p.name === target.name && p.bed === target.bed);
+            
+            if (requesterIndex === -1 || targetIndex === -1) {
+                showToast('交换失败，未找到相关人员');
+                return;
+            }
+            
+            // 保存双方的床位号（交换床位，但保留原床位号）
+            const requesterBed = requesterDorm[requesterIndex].bed;
+            const targetBed = targetDorm[targetIndex].bed;
+            
+            // 执行交换
+            const temp = { ...requesterDorm[requesterIndex] };
+            requesterDorm[requesterIndex] = {
+                ...targetDorm[targetIndex],
+                bed: requesterBed, // 保留原床位号
+                swappedAt: new Date().toISOString()
+            };
+            targetDorm[targetIndex] = {
+                ...temp,
+                bed: targetBed, // 保留原床位号
+                swappedAt: new Date().toISOString()
+            };
+            
+            // 排序床位
+            requesterDorm.sort((a, b) => a.bed - b.bed);
+            targetDorm.sort((a, b) => a.bed - b.bed);
+        }
+        
+        // 添加通知
+        function addNotification(targetUser, content, type, relatedId) {
+            const notification = {
+                id: 'notif_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                targetUser,
+                content,
+                type,
+                relatedId,
+                isRead: false,
+                createdAt: new Date().toISOString()
+            };
+            
+            notifications.push(notification);
+        }
+        
+        // 更新通知显示
+        function updateNotifications() {
+            // 筛选当前用户的通知
+            const userNotifications = notifications.filter(notif => 
+                notif.targetUser === currentUser
+            );
+            
+            // 未读通知数量
+            const unreadCount = userNotifications.filter(notif => !notif.isRead).length;
+            
+            // 更新通知徽章
+            if (unreadCount > 0) {
+                notificationBadge.textContent = unreadCount;
+                notificationBadge.classList.remove('hidden');
+            } else {
+                notificationBadge.classList.add('hidden');
+            }
+            
+            // 更新通知列表
+            if (userNotifications.length === 0) {
+                notificationsContainer.innerHTML = `
+                    <div class="px-3 py-2 text-sm text-gray-500">
+                        暂无通知
+                    </div>
+                `;
+                return;
+            }
+            
+            // 按时间倒序排列
+            userNotifications.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+            );
+            
+            notificationsContainer.innerHTML = '';
+            userNotifications.forEach(notification => {
+                const notifElement = document.createElement('div');
+                notifElement.className = `px-3 py-2 text-sm ${!notification.isRead ? 'bg-primary/5' : ''}`;
+                notifElement.innerHTML = `
+                    <p class="${!notification.isRead ? 'font-medium' : ''}">${notification.content}</p>
+                    <p class="text-xs text-gray-500 mt-1">${formatTime(notification.createdAt)}</p>
+                `;
+                
+                // 点击通知处理
+                if (notification.type === 'swap_request' && !notification.isRead) {
+                    notifElement.style.cursor = 'pointer';
+                    notifElement.addEventListener('click', () => {
+                        // 查找对应的交换请求
+                        const request = swapRequests.find(req => req.id === notification.relatedId);
+                        if (request) {
+                            openHandleSwapModal(request);
+                        }
+                        // 标记为已读
+                        notification.isRead = true;
+                        saveAllData();
+                        updateNotifications();
+                    });
+                }
+                
+                notificationsContainer.appendChild(notifElement);
+            });
+        }
+        
+        // 打开处理交换请求模态框
+        function openHandleSwapModal(request) {
+            currentSwapRequest = request;
+            
+            // 填充模态框信息
+            swapRequester.textContent = request.requester.name;
+            handleSwapYourInfo.textContent = `${request.target.name} - ${request.target.dormId}号寝室${request.target.bed}号床`;
+            handleSwapOtherInfo.textContent = `${request.requester.name} - ${request.requester.dormId}号寝室${request.requester.bed}号床`;
+            swapRequestMessage.textContent = request.message || '无附加信息';
+            
+            // 显示模态框
+            handleSwapModal.classList.remove('opacity-0', 'pointer-events-none');
+            handleSwapModal.querySelector('div').classList.remove('scale-95');
+            handleSwapModal.querySelector('div').classList.add('scale-100');
+        }
+        
+        // 显示交换结果模态框
+        function showSwapResultModal(type, title, message) {
+            // 设置图标
+            if (type === 'success') {
+                swapResultIcon.className = 'w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4';
+                swapResultIcon.innerHTML = '<i class="fa fa-check text-green-500 text-2xl"></i>';
+            } else if (type === 'error') {
+                swapResultIcon.className = 'w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4';
+                swapResultIcon.innerHTML = '<i class="fa fa-times text-red-500 text-2xl"></i>';
+            } else {
+                swapResultIcon.className = 'w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4';
+                swapResultIcon.innerHTML = '<i class="fa fa-info text-blue-500 text-2xl"></i>';
+            }
+            
+            // 设置文本
+            swapResultTitle.textContent = title;
+            swapResultMessage.textContent = message;
+            
+            // 显示模态框
+            swapResultModal.classList.remove('opacity-0', 'pointer-events-none');
+            swapResultModal.querySelector('div').classList.remove('scale-95');
+            swapResultModal.querySelector('div').classList.add('scale-100');
+        }
+        
+        // 隐藏交换请求模态框
+        function hideSwapRequestModal() {
+            swapRequestModal.classList.add('opacity-0', 'pointer-events-none');
+            swapRequestModal.querySelector('div').classList.remove('scale-100');
+            swapRequestModal.querySelector('div').classList.add('scale-95');
+        }
+        
+        // 隐藏处理交换请求模态框
+        function hideHandleSwapModal() {
+            handleSwapModal.classList.add('opacity-0', 'pointer-events-none');
+            handleSwapModal.querySelector('div').classList.remove('scale-100');
+            handleSwapModal.querySelector('div').classList.add('scale-95');
+        }
+        
+        // 清空人员选择
+        function clearPersonSelection() {
+            // 移除所有选中状态
+            document.querySelectorAll('.person-item.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            // 清空选择数组
+            selectedPersons = [];
+            
+            // 更新交换按钮
+            updateSwapButton();
+        }
+        
+        // 显示确认模态框
+        function showConfirmModal(title, message, confirmAction) {
+            confirmTitle.textContent = title;
+            confirmMessage.textContent = message;
+            confirmModal.classList.remove('opacity-0', 'pointer-events-none');
+            confirmModal.querySelector('div').classList.remove('scale-95');
+            confirmModal.querySelector('div').classList.add('scale-100');
+            
+            // 设置确认按钮的点击事件
+            confirmActionBtn.onclick = () => {
+                confirmAction();
+                hideConfirmModal();
+            };
+        }
+        
+        // 隐藏确认模态框
+        function hideConfirmModal() {
+            confirmModal.classList.add('opacity-0', 'pointer-events-none');
+            confirmModal.querySelector('div').classList.remove('scale-100');
+            confirmModal.querySelector('div').classList.add('scale-95');
+        }
+        
+        // 清空所有数据
+        function clearAllData() {
+            // 重置数据
+            dormitories = {
+                '110': [],
+                '111': [],
+                '201': [],
+                '202': [],
+                '203': []
+            };
+            swapRequests = [];
+            notifications = [];
+            
+            // 保存数据
+            saveAllData();
+            
+            // 重新渲染
+            renderAllDorms();
+            updateNotifications();
+            
+            showToast('所有数据已清空');
+        }
+        
+        // 导出所有数据
+        function exportAllData() {
+            try {
+                // 创建导出数据对象
+                const exportData = {
+                    timestamp: new Date().toISOString(),
+                    exportedBy: currentUser,
+                    dormitories: dormitories,
+                    swapRequests: swapRequests,
+                    notifications: notifications,
+                    onlineUsers: onlineUsers
+                };
+                
+                // 转换为JSON字符串
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                
+                // 创建下载链接
+                const exportFileDefaultName = `寝室分配数据_${new Date().toLocaleDateString()}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+                
+                showToast('数据导出成功');
+            } catch (e) {
+                console.error('数据导出失败', e);
+                showToast('数据导出失败，请重试');
+            }
+        }
+        
+        // 渲染单个寝室
+        function renderDorm(dormId) {
+            const dormElement = document.getElementById(`dorm-${dormId}`);
+            const membersList = dormElement.querySelector('.dorm-members');
+            const countElement = dormElement.querySelector('.dorm-count');
+            
+            // 更新人数
+            countElement.textContent = dormitories[dormId].length;
+            
+            // 清空列表
+            membersList.innerHTML = '';
+            
+            // 如果没有人员
+            if (dormitories[dormId].length === 0) {
+                membersList.innerHTML = `
+                    <div class="text-gray-500 text-center py-6 text-sm">
+                        该寝室暂无人员
+                    </div>
+                `;
+                return;
+            }
+            
+            // 添加人员列表
+            dormitories[dormId].forEach((person, index) => {
+                const isAddedByCurrentUser = person.addedBy === currentUser;
+                const isCurrentUser = person.name === currentUser;
+                
+                // 检查用户是否在线
+                const isOnline = onlineUsers.some(u => u.name === person.name);
+                
+                // 检查是否有涉及该人的未处理交换请求
+                let hasPendingRequest = false;
+                if (!isAdmin && person.name === currentUser) {
+                    hasPendingRequest = swapRequests.some(req => 
+                        req.target.name === currentUser && req.status === 'pending'
+                    );
+                }
+                
+                const personElement = document.createElement('div');
+                personElement.className = `person-item ${hasPendingRequest ? 'has-request' : ''}`;
+                
+                // 在线状态指示器
+                const onlineIndicator = isOnline ? 
+                    '<span class="pulse-dot mr-1"></span>' : 
+                    '<span class="w-2 h-2 rounded-full bg-offline mr-1"></span>';
+                
+                // 普通用户和管理员看到的操作按钮不同
+                let actionButtons = '';
+                if (isAdmin) {
+                    actionButtons = `
+                        <button class="text-gray-400 hover:text-red-500 transition-colors" 
+                                onclick="removePersonFromDorm('${dormId}', ${index})">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    `;
+                } else {
+                    // 不是自己才能选择交换
+                    const canSwap = !isCurrentUser;
+                    
+                    actionButtons = `
+                        <div class="flex space-x-1">
+                            ${canSwap ? `
+                                <button class="text-gray-400 hover:text-primary transition-colors" 
+                                        onclick="selectPersonForSwap('${dormId}', ${index}, this.parentElement.parentElement)">
+                                    <i class="fa fa-exchange"></i>
+                                </button>
+                            ` : ''}
+                            ${isAddedByCurrentUser ? `
+                                <button class="text-gray-400 hover:text-red-500 transition-colors" 
+                                        onclick="removePersonFromDorm('${dormId}', ${index})">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+                
+                personElement.innerHTML = `
+                    <div class="flex items-center">
+                        ${onlineIndicator}
+                        <span class="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center mr-2">
+                            ${person.bed}
+                        </span>
+                        <span>
+                            ${person.name}
+                            ${isCurrentUser ? '<span class="ml-1.5 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">你</span>' : ''}
+                            ${isAddedByCurrentUser && !isCurrentUser ? '<span class="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">你添加</span>' : ''}
+                            ${hasPendingRequest ? '<span class="ml-1.5 text-xs bg-pending/10 text-pending px-1.5 py-0.5 rounded">有请求</span>' : ''}
+                        </span>
+                    </div>
+                    ${actionButtons}
+                `;
+                membersList.appendChild(personElement);
+            });
+        }
+        
+        // 渲染所有寝室
+        function renderAllDorms() {
+            Object.keys(dormitories).forEach(dormId => {
+                renderDorm(dormId);
+            });
+        }
+        
+        // 显示提示信息
+        function showToast(message) {
+            toastMessage.textContent = message;
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 2000);
+        }
+        
+        // 格式化时间显示
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            if (diffMins < 1) {
+                return '刚刚';
+            } else if (diffMins < 60) {
+                return `${diffMins}分钟前`;
+            } else if (diffHours < 24) {
+                return `${diffHours}小时前`;
+            } else if (diffDays < 7) {
+                return `${diffDays}天前`;
+            } else {
+                return `${date.getMonth() + 1}月${date.getDate()}日`;
+            }
+        }
+        
+        // 添加事件监听
+        function addEventListeners() {
+            // 登录相关
+            loginBtn.addEventListener('click', login);
+            adminLoginBtn.addEventListener('click', adminLogin);
+            adminLoginLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                showAdminLoginInterface();
+            });
+            backToUserLogin.addEventListener('click', (e) => {
+                e.preventDefault();
+                showLoginInterface();
+            });
+            logoutBtn.addEventListener('click', logout);
+            
+            // 按Enter键登录
+            usernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    login();
+                }
+            });
+            adminPasswordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    adminLogin();
+                }
+            });
+            
+            // 添加人员按钮
+            addBtn.addEventListener('click', addPersonToDorm);
+            
+            // 交换按钮
+            swapBtn.addEventListener('click', openSwapRequestModal);
+            
+            // 交换请求模态框
+            closeSwapRequestBtn.addEventListener('click', hideSwapRequestModal);
+            cancelSwapBtn.addEventListener('click', hideSwapRequestModal);
+            sendSwapBtn.addEventListener('click', sendSwapRequest);
+            
+            // 处理交换请求模态框
+            closeHandleSwapModal.addEventListener('click', () => {
+                currentSwapRequest = null;
+                hideHandleSwapModal();
+            });
+            rejectSwapBtn.addEventListener('click', () => handleSwapRequest(false));
+            acceptSwapBtn.addEventListener('click', () => handleSwapRequest(true));
+            
+            // 交换结果模态框
+            closeSwapResultModal.addEventListener('click', () => {
+                swapResultModal.classList.add('opacity-0', 'pointer-events-none');
+                swapResultModal.querySelector('div').classList.remove('scale-100');
+                swapResultModal.querySelector('div').classList.add('scale-95');
+            });
+            
+            // 管理员功能按钮
+            clearAllDataBtn.addEventListener('click', () => {
+                showConfirmModal(
+                    '确认清空所有数据',
+                    '此操作将删除所有寝室数据、交换请求和通知，且无法恢复。您确定要继续吗？',
+                    clearAllData
+                );
+            });
+            exportAllDataBtn.addEventListener('click', exportAllData);
+            manageUsersBtn.addEventListener('click', () => {
+                showToast('用户管理功能即将上线');
+            });
+            
+            // 通知按钮
+            notificationBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                notificationList.classList.toggle('hidden');
+                
+                // 打开时标记所有通知为已读
+                if (!notificationList.classList.contains('hidden')) {
+                    notifications.forEach(notif => {
+                        if (notif.targetUser === currentUser && !notif.isRead) {
+                            notif.isRead = true;
+                        }
+                    });
+                    saveAllData();
+                    updateNotifications();
+                }
+            });
+            
+            // 在线用户按钮
+            onlineUsersBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onlineUsersList.classList.toggle('hidden');
+            });
+            
+            // 点击其他地方关闭下拉列表
+            document.addEventListener('click', () => {
+                notificationList.classList.add('hidden');
+                onlineUsersList.classList.add('hidden');
+            });
+            
+            // 确认模态框按钮
+            cancelConfirmBtn.addEventListener('click', hideConfirmModal);
+            
+            // 按Enter键添加人员
+            bedNumberInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    addPersonToDorm();
+                }
+            });
+            
+            // 点击模态框背景关闭
+            swapRequestModal.addEventListener('click', (e) => {
+                if (e.target === swapRequestModal) {
+                    hideSwapRequestModal();
+                }
+            });
+            
+            handleSwapModal.addEventListener('click', (e) => {
+                if (e.target === handleSwapModal) {
+                    currentSwapRequest = null;
+                    hideHandleSwapModal();
+                }
+            });
+            
+            swapResultModal.addEventListener('click', (e) => {
+                if (e.target === swapResultModal) {
+                    swapResultModal.classList.add('opacity-0', 'pointer-events-none');
+                    swapResultModal.querySelector('div').classList.remove('scale-100');
+                    swapResultModal.querySelector('div').classList.add('scale-95');
+                }
+            });
+            
+            confirmModal.addEventListener('click', (e) => {
+                if (e.target === confirmModal) {
+                    hideConfirmModal();
+                }
+            });
+            
+            // 监听本地存储变化，实现多标签页同步
+            window.addEventListener('storage', (e) => {
+                if (!currentUser) return;
+                
+                // 如果是数据相关的存储变化，重新加载数据
+                if (e.key === 'dormSystemData' || 
+                    e.key === 'dormSystemSwapRequests' || 
+                    e.key === 'dormSystemNotifications' ||
+                    e.key === ONLINE_USERS_STORAGE_KEY) {
+                    
+                    updateSyncStatus(false);
+                    
+                    // 延迟一点时间再加载，确保数据已完全写入
+                    setTimeout(() => {
+                        loadAllData();
+                        renderAllDorms();
+                        updateNotifications();
+                        updateOnlineUsersList();
+                        updateSyncStatus(true);
+                    }, 300);
+                }
+            });
+        }
+        
+        // 页面关闭时更新状态
+        window.addEventListener('beforeunload', () => {
+            if (currentUser) {
+                updateUserOnlineStatus(false);
+            }
+        });
+        
+        // 暴露函数到全局
+        window.removePersonFromDorm = removePersonFromDorm;
+        window.selectPersonForSwap = selectPersonForSwap;
+        
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
